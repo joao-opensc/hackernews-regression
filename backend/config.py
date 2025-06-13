@@ -25,7 +25,7 @@ HIDDEN_DIM = 128            # Hidden layer size
 DROPOUT_RATE = 0.1          # Dropout rate
 WEIGHT_DECAY = 1e-5         # Weight decay for regularization
 PATIENCE = 25               # Early stopping patience (reduced for faster training)
-MAX_EPOCHS = 50             # Maximum epochs to train (increased to allow for convergence)
+MAX_EPOCHS = 100             # Maximum epochs to train (increased to allow for convergence)
 
 # Training Configuration - Optimized for speed while maintaining convergence
 VALIDATION_FREQUENCY = 2    # Validate every N epochs (reduced frequency for speed)

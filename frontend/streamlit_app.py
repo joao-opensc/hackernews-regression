@@ -43,93 +43,33 @@ def main():
         layout="wide"
     )
     
-    # Custom CSS for Hacker News-like styling
+    # Custom CSS for better styling
     st.markdown("""
     <style>
     .main-header {
         text-align: center;
         padding: 1rem 0;
         margin-bottom: 2rem;
-        border-bottom: 1px solid #ff6600;
-    }
-    .main-header h1 {
-        color: #ff6600;
-        font-family: Verdana, Geneva, sans-serif;
-        font-size: 18pt;
-        margin-bottom: 0.5rem;
-    }
-    .main-header p {
-        color: #828282;
-        font-family: Verdana, Geneva, sans-serif;
-        font-size: 10pt;
     }
     .score-card {
-        background: white;
-        border: 1px solid #ff6600;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 1rem;
-        border-radius: 3px;
+        border-radius: 10px;
+        color: white;
         text-align: center;
         margin: 0.5rem 0;
-        font-family: Verdana, Geneva, sans-serif;
     }
-    .score-card h4 {
-        color: #ff6600;
-        font-size: 10pt;
-        margin-bottom: 0.5rem;
-        font-weight: bold;
+    .win-animation {
+        animation: pulse 0.5s ease-in-out infinite alternate;
     }
-    .score-card h2 {
-        color: #000000;
-        font-size: 16pt;
-        margin: 0.5rem 0;
-    }
-    .score-card p {
-        color: #828282;
-        font-size: 9pt;
-        margin: 0;
-    }
-    .post-card {
-        background: white;
-        border: 1px solid #828282;
-        padding: 1rem;
-        border-radius: 3px;
-        margin: 1rem 0;
-        font-family: Verdana, Geneva, sans-serif;
-    }
-    .post-card h3 {
-        color: #000000;
-        font-size: 11pt;
-        margin-top: 0;
-        margin-bottom: 0.5rem;
-        line-height: 1.2;
-    }
-    .post-card p {
-        color: #828282;
-        font-size: 8pt;
-        margin: 0.2rem 0;
-    }
-    .post-card a {
-        color: #ff6600;
-        text-decoration: none;
-    }
-    .post-card a:hover {
-        text-decoration: underline;
-    }
-    .stButton > button {
-        background-color: white;
-        border: 1px solid #ff6600;
-        color: #ff6600;
-        font-family: Verdana, Geneva, sans-serif;
-        font-size: 9pt;
-    }
-    .stButton > button:hover {
-        background-color: #ff6600;
-        color: white;
+    @keyframes pulse {
+        from { transform: scale(1); }
+        to { transform: scale(1.05); }
     }
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="main-header"><h1>Hacker News Upvote Predictor</h1><p>Can you predict better than our AI model?</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>🚀 Hacker News Upvote Predictor</h1><p>Can you predict better than our AI model?</p></div>', unsafe_allow_html=True)
 
     # Initialize session state for form values
     if 'title' not in st.session_state:
@@ -143,13 +83,14 @@ def main():
     # Current post information
     st.subheader("📰 Current Post")
     
-    # Display current post in Hacker News style
+    # Display current post in a nice card format
     with st.container():
         st.markdown(f"""
-        <div class="post-card">
-            <h3>{st.session_state.title}</h3>
-            <p>by {st.session_state.author} | <a href="{st.session_state.url}" target="_blank">{st.session_state.url[:50]}{'...' if len(st.session_state.url) > 50 else ''}</a></p>
-            <p>{st.session_state.date} at {st.session_state.time_str}</p>
+        <div style="background: white; padding: 1.5rem; border-radius: 10px; border-left: 4px solid #ff6600; margin: 1rem 0;">
+            <h3 style="color: #ff6600; margin-top: 0;">{st.session_state.title}</h3>
+            <p><strong>Author:</strong> {st.session_state.author}</p>
+            <p><strong>URL:</strong> <a href="{st.session_state.url}" target="_blank">{st.session_state.url[:50]}{'...' if len(st.session_state.url) > 50 else ''}</a></p>
+            <p><strong>Posted:</strong> {st.session_state.date} at {st.session_state.time_str}</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -255,7 +196,7 @@ def show_results():
     
     with col3:
         st.markdown(f"""
-        <div class="score-card" style="border: 2px solid #ff6600;">
+        <div class="score-card" style="background: linear-gradient(135deg, #ff6600 0%, #ff8533 100%);">
             <h4>Actual Score</h4>
             <h2>{true_score}</h2>
             <p>Truth!</p>
