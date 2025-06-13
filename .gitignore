@@ -3,3 +3,4 @@ data/
 wandb/
 training_runs/
 artifacts/word2vec_trained_model
+!artifacts/training_runs/

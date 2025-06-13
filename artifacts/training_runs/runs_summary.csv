@@ -1,0 +1,2 @@
+timestamp,run_dir,test_r2,test_loss,best_val_r2,learning_rate,hidden_dim,dropout_rate,weight_decay,epochs_trained,architecture
+2025-06-13T10:52:19.732922,run_20250613_103621,0.021113306537736798,1.0784306526184082,0.08650762469482542,0.002,128,0.1,1e-05,500,numerical_plus_title
