@@ -20,8 +20,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 
-import config as cfg
-from data_processing import create_data_loader_fixed as create_data_loader, prepare_features_fixed as prepare_features
+from . import config as cfg
+from .data_processing import create_data_loader_fixed as create_data_loader, prepare_features_fixed as prepare_features
 
 
 class NumericalPlusTitleNN(nn.Module):
@@ -139,6 +139,7 @@ def train_single_model(X_num_train, X_num_val, X_num_test,
     
     print(f"🏋️ Training for {cfg.MAX_EPOCHS} epochs with config from cfg")
     print(f"  LR={cfg.LEARNING_RATE}, Hidden={cfg.HIDDEN_DIM}, Dropout={cfg.DROPOUT_RATE}")
+    print(f"  Validation every {cfg.VALIDATION_FREQUENCY} epochs, Printing every {cfg.PRINT_FREQUENCY} epochs")
     
     for epoch in range(cfg.MAX_EPOCHS):
         # Training
@@ -153,47 +154,69 @@ def train_single_model(X_num_train, X_num_val, X_num_test,
         
         optimizer.step()
         
-        # Calculate training R2
-        with torch.no_grad():
-            train_r2 = r2_score(y_train, train_pred.numpy())
+        # Validation and metrics computation (less frequent for speed)
+        should_validate = (epoch % cfg.VALIDATION_FREQUENCY == 0) or (epoch == cfg.MAX_EPOCHS - 1)
+        should_print = (epoch % cfg.PRINT_FREQUENCY == 0) or (epoch == cfg.MAX_EPOCHS - 1)
+        should_compute_r2 = (epoch % cfg.COMPUTE_R2_FREQUENCY == 0) or (epoch == cfg.MAX_EPOCHS - 1)
+        should_log_wandb = (epoch % cfg.WANDB_LOG_FREQUENCY == 0) or (epoch == cfg.MAX_EPOCHS - 1)
         
-        # Validation every epoch (cfg.VALIDATION_FREQUENCY should be 1)
-        model.eval()
-        with torch.no_grad():
-            val_pred = model(X_num_val_tensor, X_title_val_tensor)
-            val_loss = criterion(val_pred, y_val_tensor).item()
-            val_r2 = r2_score(y_val, val_pred.numpy())
+        val_r2 = None
+        val_loss = None
+        train_r2 = None
         
-        # Log ALL metrics every epoch
-        wandb.log({
-            "epoch": epoch,
-            "train_loss": train_loss.item(),
-            "val_loss": val_loss,
-            "train_r2": train_r2,
-            "val_r2": val_r2,
-            "learning_rate": optimizer.param_groups[0]['lr'],
-            "best_val_r2": max(best_val_r2, val_r2),
-            "patience_counter": patience_counter
-        })
+        if should_validate:
+            model.eval()
+            with torch.no_grad():
+                val_pred = model(X_num_val_tensor, X_title_val_tensor)
+                val_loss = criterion(val_pred, y_val_tensor).item()
+                
+                # Only compute R² if needed (expensive operation)
+                if should_compute_r2:
+                    val_r2 = r2_score(y_val, val_pred.numpy())
+                    train_r2 = r2_score(y_train, train_pred.numpy())
         
-        print(f"Epoch {epoch:2d}: Train Loss={train_loss.item():.4f}, Val Loss={val_loss:.4f}, Train R²={train_r2:.4f}, Val R²={val_r2:.4f}, LR={optimizer.param_groups[0]['lr']:.6f}")
+        # Log to wandb less frequently
+        if should_log_wandb and val_r2 is not None:
+            wandb.log({
+                "epoch": epoch,
+                "train_loss": train_loss.item(),
+                "val_loss": val_loss,
+                "train_r2": train_r2,
+                "val_r2": val_r2,
+                "learning_rate": optimizer.param_groups[0]['lr'],
+                "best_val_r2": max(best_val_r2, val_r2) if val_r2 is not None else best_val_r2,
+                "patience_counter": patience_counter
+            })
         
-        # Early stopping and best model tracking
-        if val_r2 > best_val_r2:
-            best_val_r2 = val_r2
-            patience_counter = 0
-            best_model_state = model.state_dict().copy()
-            print(f"  → New best validation R²: {val_r2:.6f}")
-        else:
-            patience_counter += 1
+        # Print progress less frequently
+        if should_print:
+            if val_r2 is not None and train_r2 is not None:
+                print(f"Epoch {epoch:2d}: Train Loss={train_loss.item():.4f}, Val Loss={val_loss:.4f}, Train R²={train_r2:.4f}, Val R²={val_r2:.4f}, LR={optimizer.param_groups[0]['lr']:.6f}")
+            else:
+                print(f"Epoch {epoch:2d}: Train Loss={train_loss.item():.4f}, LR={optimizer.param_groups[0]['lr']:.6f}")
+        elif cfg.VERBOSE_TRAINING:
+            # Only show basic progress for non-print epochs if verbose is enabled
+            if epoch % 10 == 0:
+                print(f"  ... Epoch {epoch:2d}: Train Loss={train_loss.item():.4f}")
         
-        # Update learning rate scheduler
-        scheduler.step(val_r2)
-        
-        # Early stopping
-        if patience_counter >= cfg.PATIENCE:
-            print(f"  → Early stopping at epoch {epoch} (patience={cfg.PATIENCE})")
-            break
+        # Early stopping and best model tracking (only when we have validation)
+        if val_r2 is not None:
+            if val_r2 > best_val_r2:
+                best_val_r2 = val_r2
+                patience_counter = 0
+                best_model_state = model.state_dict().copy()
+                if should_print:
+                    print(f"  → New best validation R²: {val_r2:.6f}")
+            else:
+                patience_counter += 1
+            
+            # Update learning rate scheduler
+            scheduler.step(val_r2)
+            
+            # Early stopping
+            if patience_counter >= cfg.PATIENCE:
+                print(f"  → Early stopping at epoch {epoch} (patience={cfg.PATIENCE})")
+                break
     
     # Load best model and evaluate on test set
     if best_model_state is not None:

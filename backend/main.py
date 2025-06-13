@@ -7,16 +7,13 @@ from fastapi import FastAPI
 from pydantic import BaseModel, HttpUrl
 
 # Import the Scorer class from our prediction module
-from predict import Scorer
+from .predict import Scorer
 
 app = FastAPI(
     title="HackerNews Score Predictor API",
     description="An API to predict the potential score of a HackerNews submission.",
     version="1.0.0"
 )
-
-# Initialize the scorer (using default artifacts directory)
-scorer = Scorer()
 
 # Define the request body model using Pydantic for data validation
 class Story(BaseModel):
@@ -54,8 +51,12 @@ def post_predict(story: Story):
     - **user**: The username of the submitter.
     - **timestamp**: The UNIX timestamp of the submission.
     """
-    submission_time = datetime.fromtimestamp(story.timestamp)
-    score = scorer.predict(story.title, story.url, story.user, submission_time)
+    score = predict_score(
+        title=story.title,
+        url=story.url,
+        user=story.user,
+        timestamp=story.timestamp
+    )
     return {"predicted_score": score}
 
 # To run this app:

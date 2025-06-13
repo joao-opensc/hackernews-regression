@@ -20,18 +20,24 @@ TITLE_EMB_DIM = 200         # GloVe title embeddings (200D)
 NUMERICAL_DIM = 36          # Enhanced: 34 original + domain_mean + user_mean
 
 # Neural Network Configuration - SINGLE CONFIG ONLY
-LEARNING_RATE = 2e-3        # Learning rate
+LEARNING_RATE = 1e-3        # Learning rate (reduced from 2e-3 to avoid overshooting)
 HIDDEN_DIM = 128            # Hidden layer size
-DROPOUT_RATE = 0.1          # Dropout rate
-WEIGHT_DECAY = 1e-5         # Weight decay for regularization
-PATIENCE = 50               # Early stopping patience (should be > MAX_EPOCHS if you want to train all epochs)
-MAX_EPOCHS = 10             # Maximum epochs to train
+DROPOUT_RATE = 0.15         # Dropout rate (increased from 0.1 for better regularization)
+WEIGHT_DECAY = 5e-5         # Weight decay for regularization (increased from 1e-5)
+PATIENCE = 25               # Early stopping patience (reduced from 50 to be reasonable vs MAX_EPOCHS)
+MAX_EPOCHS = 100            # Maximum epochs to train (increased from 10!)
 
 # Training Configuration
-VALIDATION_FREQUENCY = 1    # Validate every N epochs (set to 1 for every epoch)
-GRADIENT_CLIP_NORM = 1.0    # Gradient clipping max norm
-SCHEDULER_FACTOR = 0.5      # LR scheduler reduction factor
-SCHEDULER_PATIENCE = 50     # LR scheduler patience
+VALIDATION_FREQUENCY = 5       # Validate every N epochs (increased from 1 for speed)
+GRADIENT_CLIP_NORM = 1.0       # Gradient clipping max norm
+SCHEDULER_FACTOR = 0.7         # LR scheduler reduction factor (increased from 0.5 for gentler reduction)
+SCHEDULER_PATIENCE = 15        # LR scheduler patience (reduced from 50 to be effective)
+
+# Performance Monitoring Configuration (NEW - for speed optimization)
+PRINT_FREQUENCY = 5            # Print progress every N epochs (instead of every epoch)
+WANDB_LOG_FREQUENCY = 5        # Log to wandb every N epochs (instead of every epoch)
+COMPUTE_R2_FREQUENCY = 5       # Compute R² every N epochs (expensive operation)
+VERBOSE_TRAINING = False       # Set to True for detailed epoch-by-epoch output
 
 # Performance Thresholds
 TARGET_R2 = 0.2             # Target R² score for the model

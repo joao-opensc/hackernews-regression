@@ -14,7 +14,7 @@ import pickle
 import re
 from urllib.parse import urlparse
 
-import config as cfg
+from . import config as cfg
 
 def load_glove_embeddings():
     """Load cached GloVe embeddings."""
