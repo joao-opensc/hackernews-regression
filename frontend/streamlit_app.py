@@ -15,7 +15,7 @@ import numpy as np
 import requests
 
 def load_sample_data():
-    with open('frontend/data/samples.json', 'r') as f:
+    with open('frontend/datas/samples.json', 'r') as f:
         data = json.load(f)
     return random.choice(data['entries'])
 
