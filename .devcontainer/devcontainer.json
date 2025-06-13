@@ -1,0 +1,20 @@
+{
+    "name": "Jupyter Notebook Environment",
+    "dockerFile": "Dockerfile",
+    "context": "..",
+    "containerEnv": {
+        "JUPYTER_PATH": "/workspace"
+    },
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "type=bind,source=${localWorkspaceFolder},target=/workspace,consistency=cached",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-toolsai.jupyter"
+            ]
+        }
+    },
+    "forwardPorts": [8888],
+    "remoteUser": "vscode"
+} 
