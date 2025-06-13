@@ -12,20 +12,30 @@ TOTAL_BUDGET = 100000
 NUM_DOMAINS = 200
 NUM_USERS = 1000
 
+# Random Seeds for reproducibility
+RANDOM_STATE = 42
+
 # Model Architecture Constants - SIMPLIFIED ARCHITECTURE (Numerical + Title)
 TITLE_EMB_DIM = 200         # GloVe title embeddings (200D)
 NUMERICAL_DIM = 36          # Enhanced: 34 original + domain_mean + user_mean
 
-# Neural Network Configuration Testing - Multiple configs will be tested
-# The training script will automatically test these ranges:
+# Neural Network Configuration - SINGLE CONFIG ONLY
+LEARNING_RATE = 2e-3        # Learning rate
+HIDDEN_DIM = 128            # Hidden layer size
+DROPOUT_RATE = 0.1          # Dropout rate
+WEIGHT_DECAY = 1e-5         # Weight decay for regularization
+PATIENCE = 50               # Early stopping patience (should be > MAX_EPOCHS if you want to train all epochs)
+MAX_EPOCHS = 10             # Maximum epochs to train
 
-# Single Config for Quick Testing (if needed)
-LEARNING_RATE = 2e-3        # Good starting point for simplified architecture
-HIDDEN_DIM = 128            # Balanced network size
-DROPOUT_RATE = 0.1          # Moderate dropout
-WEIGHT_DECAY = 1e-5         # Light regularization
-PATIENCE = 300              # Patience for early stopping
-MAX_EPOCHS = 10           # Maximum epochs per configuration test
+# Training Configuration
+VALIDATION_FREQUENCY = 1    # Validate every N epochs (set to 1 for every epoch)
+GRADIENT_CLIP_NORM = 1.0    # Gradient clipping max norm
+SCHEDULER_FACTOR = 0.5      # LR scheduler reduction factor
+SCHEDULER_PATIENCE = 50     # LR scheduler patience
+
+# Performance Thresholds
+TARGET_R2 = 0.2             # Target R² score for the model
+CLOSE_PERFORMANCE_THRESHOLD = 0.003  # Threshold for "close" performance comparison
 
 # Data Split Constants
 VAL_SIZE = 0.2              # 20% for test set

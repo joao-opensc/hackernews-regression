@@ -39,65 +39,76 @@ class Scorer:
     def __init__(self, run_dir=None):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        # Determine artifacts directory
+        # Determine artifacts directory - ALWAYS use timestamped directories
         if run_dir:
+            if not os.path.exists(run_dir):
+                raise FileNotFoundError(f"Specified run directory does not exist: {run_dir}")
             artifacts_dir = run_dir
             print(f"--- Loading artifacts from specified directory: {run_dir} ---")
         else:
-            # Try to find the most recent training run
+            # ALWAYS try to find the most recent training run
             most_recent_run = find_most_recent_run()
             if most_recent_run:
                 artifacts_dir = most_recent_run
                 print(f"--- Loading artifacts from most recent run: {most_recent_run} ---")
             else:
-                artifacts_dir = cfg.ARTIFACTS_DIR
-                print(f"--- No training runs found, using default directory: {artifacts_dir} ---")
+                raise FileNotFoundError(
+                    "No training runs found! Please run training first or specify --run-dir.\n"
+                    f"Expected training runs in: artifacts/training_runs/run_YYYYMMDD_HHMMSS/"
+                )
         
-        # Load artifacts
+        # Load artifacts ONLY from timestamped directory
         self.word_to_idx, self.embeddings = load_glove_embeddings()
         
-        # Load scaler from the run directory or default location
-        try:
-            with open(os.path.join(artifacts_dir, "scaler.pkl"), 'rb') as f:
-                self.scaler = pickle.load(f)
-        except FileNotFoundError:
-            with open(cfg.SCALER_PATH, 'rb') as f:
-                self.scaler = pickle.load(f)
+        # Load scaler from timestamped run directory ONLY
+        scaler_path = os.path.join(artifacts_dir, "scaler.pkl")
+        if not os.path.exists(scaler_path):
+            raise FileNotFoundError(f"Scaler not found in run directory: {scaler_path}")
+        
+        with open(scaler_path, 'rb') as f:
+            self.scaler = pickle.load(f)
+        print(f"✅ Loaded scaler from: {scaler_path}")
         
         # Load domain and user statistics (computed during training)
         self.domain_stats = {}
         self.user_stats = {}
         self.global_mean = 3.0  # Reasonable default for log(score)
         
-        # Try to load pre-computed statistics if available
+        # Load pre-computed statistics from timestamped directory
+        domain_stats_path = os.path.join(artifacts_dir, "domain_stats.pkl")
+        user_stats_path = os.path.join(artifacts_dir, "user_stats.pkl")
+        global_mean_path = os.path.join(artifacts_dir, "global_mean.pkl")
+        
         try:
-            with open(os.path.join(artifacts_dir, "domain_stats.pkl"), 'rb') as f:
+            with open(domain_stats_path, 'rb') as f:
                 self.domain_stats = pickle.load(f)
-            with open(os.path.join(artifacts_dir, "user_stats.pkl"), 'rb') as f:
+            with open(user_stats_path, 'rb') as f:
                 self.user_stats = pickle.load(f)
-            with open(os.path.join(artifacts_dir, "global_mean.pkl"), 'rb') as f:
+            with open(global_mean_path, 'rb') as f:
                 self.global_mean = pickle.load(f)
             print("✅ Loaded pre-computed domain/user statistics")
-        except FileNotFoundError:
-            print("⚠️ Pre-computed statistics not found, using defaults")
+        except FileNotFoundError as e:
+            print(f"⚠️ Pre-computed statistics not found: {e}")
+            print(f"⚠️ Using defaults - predictions may be less accurate")
         
-        # Load model configuration if available
+        # Load model configuration from timestamped directory
+        config_path = os.path.join(artifacts_dir, "config.json")
         try:
-            with open(os.path.join(artifacts_dir, "config.json"), 'r') as f:
+            with open(config_path, 'r') as f:
                 import json
                 config_data = json.load(f)
-                numerical_dim = config_data.get('numerical_dim', 36)
-                title_dim = config_data.get('title_dim', 200)
-                hidden_dim = config_data.get('hidden_dim', 128)
-                dropout = config_data.get('dropout', 0.1)
+                numerical_dim = config_data.get('numerical_dim', cfg.NUMERICAL_DIM)
+                title_dim = config_data.get('title_dim', cfg.TITLE_EMB_DIM)
+                hidden_dim = config_data.get('hidden_dim', cfg.HIDDEN_DIM)
+                dropout = config_data.get('dropout', cfg.DROPOUT_RATE)
                 print(f"✅ Loaded model config: {numerical_dim}D numerical, {title_dim}D title, {hidden_dim}D hidden")
         except FileNotFoundError:
-            # Default model dimensions
-            numerical_dim = 36  # Enhanced features: 34 original + domain_mean + user_mean
-            title_dim = 200     # GloVe embeddings
-            hidden_dim = 128
-            dropout = 0.1
-            print("⚠️ Model config not found, using defaults")
+            # Default model dimensions from config
+            numerical_dim = cfg.NUMERICAL_DIM
+            title_dim = cfg.TITLE_EMB_DIM
+            hidden_dim = cfg.HIDDEN_DIM
+            dropout = cfg.DROPOUT_RATE
+            print("⚠️ Model config not found, using defaults from cfg")
         
         # Load model with architecture
         self.model = NumericalPlusTitleNN(
@@ -107,30 +118,19 @@ class Scorer:
             dropout=dropout
         ).to(self.device)
         
-        # Load model weights - prioritize best_model.pth from run directory
-        model_paths_to_try = [
-            os.path.join(artifacts_dir, "best_model.pth"),
-            cfg.MODEL_PATH,
-            os.path.join(artifacts_dir, "model.pth")
-        ]
+        # Load model weights ONLY from timestamped directory
+        model_path = os.path.join(artifacts_dir, "best_model.pth")
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model not found in run directory: {model_path}")
         
-        model_loaded = False
-        for model_path in model_paths_to_try:
-            if os.path.exists(model_path):
-                try:
-                    self.model.load_state_dict(torch.load(model_path, map_location=self.device))
-                    print(f"✅ Loaded model from: {model_path}")
-                    model_loaded = True
-                    break
-                except Exception as e:
-                    print(f"⚠️ Failed to load model from {model_path}: {e}")
-                    continue
-        
-        if not model_loaded:
-            raise FileNotFoundError("Could not load model from any of the expected locations")
+        try:
+            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+            print(f"✅ Loaded model from: {model_path}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to load model from {model_path}: {e}")
         
         self.model.eval()
-        print("✅ Artifacts and model loaded successfully.")
+        print(f"✅ All artifacts loaded successfully from: {artifacts_dir}")
 
     def create_enhanced_features(self, title: str, url: str, user: str, submission_time: datetime):
         """Create the enhanced 34D numerical features used in training."""
@@ -300,9 +300,9 @@ if __name__ == '__main__':
         # No arguments provided, run example
         print("\n--- Example Prediction (using most recent training run) ---")
         scorer = Scorer()  # Will automatically find most recent run
-        test_title = "Show HN: I built a neural network to predict HackerNews scores"
-        test_url = "https://github.com/myuser/hn-predictor"
-        test_user = "techuser"
+        test_title = "Sami nami na eh eh"
+        test_url = "https://wakawaka.com"
+        test_user = "eh eh"
         test_timestamp = int(datetime.now().timestamp())
         
         submission_time = datetime.fromtimestamp(test_timestamp)

@@ -167,7 +167,8 @@ def prepare_features_fixed(config):
     # Load and sample data FIRST
     print("Loading raw data...")
     df = pd.read_parquet(config.DATA_PATH)
-    df_sample = df.sample(n=config.NUMBER_OF_SAMPLES, random_state=42).copy()
+    print(f"📊 Sampling {config.NUMBER_OF_SAMPLES:,} samples...")
+    df_sample = df.sample(n=config.NUMBER_OF_SAMPLES, random_state=config.RANDOM_STATE).copy()
     print(f"Sampled: {len(df_sample)} samples")
     
     # Apply filtering AFTER sampling
@@ -334,7 +335,7 @@ if __name__ == "__main__":
     from sklearn.preprocessing import StandardScaler
     
     indices = np.arange(len(data['y']))
-    train_idx, test_idx = train_test_split(indices, test_size=0.2, random_state=42)
+    train_idx, test_idx = train_test_split(indices, test_size=cfg.VAL_SIZE, random_state=cfg.RANDOM_STATE)
     
     # Test with expanded feature set
     scaler = StandardScaler()
