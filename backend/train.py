@@ -20,8 +20,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 
-import config as cfg
-from data_processing import create_data_loader_fixed as create_data_loader, prepare_features_fixed as prepare_features
+from . import config as cfg
+from .data_processing import create_data_loader_fixed as create_data_loader, prepare_features_fixed as prepare_features
 
 
 class NumericalPlusTitleNN(nn.Module):

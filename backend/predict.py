@@ -10,9 +10,9 @@ from datetime import datetime
 import numpy as np
 import torch
 
-import config as cfg
-from data_processing import (clean_text, extract_domain, load_glove_embeddings, title_to_embedding)
-from train import NumericalPlusTitleNN
+from . import config as cfg
+from .data_processing import (clean_text, extract_domain, load_glove_embeddings, title_to_embedding)
+from .train import NumericalPlusTitleNN
 
 
 def find_most_recent_run():

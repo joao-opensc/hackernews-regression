@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, HttpUrl
 
 # Import the Scorer class from our prediction module
-from predict import Scorer
+from .predict import Scorer
 
 app = FastAPI(
     title="HackerNews Score Predictor API",
