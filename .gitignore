@@ -2,4 +2,4 @@
 data/
 wandb/
 training_runs/
-artifacts/
+artifacts/word2vec_trained_model

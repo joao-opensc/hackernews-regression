@@ -20,8 +20,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 
-import backend.config as cfg
-from backend.data_processing import create_data_loader_fixed as create_data_loader, prepare_features_fixed as prepare_features
+import config as cfg
+from data_processing import create_data_loader_fixed as create_data_loader, prepare_features_fixed as prepare_features
 
 
 class NumericalPlusTitleNN(nn.Module):
@@ -83,7 +83,7 @@ class NumericalPlusTitleNN(nn.Module):
 
 def test_configuration(config, X_num_train, X_num_val, X_num_test, 
                       X_title_train, X_title_val, X_title_test,
-                      y_train, y_val, y_test, verbose=True):
+                      y_train, y_val, y_test):
     """Test a specific neural network configuration."""
     
     # Convert to tensors
@@ -114,16 +114,13 @@ def test_configuration(config, X_num_train, X_num_val, X_num_test,
     
     # Add learning rate scheduler
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='max', factor=0.5, patience=50, verbose=False
+        optimizer, mode='max', factor=0.5, patience=50
     )
     
     best_val_r2 = -float('inf')
     patience_counter = 0
     patience = config.get('patience', 100)  # Restore reasonable early stopping
     best_model_state = None
-    
-    if verbose:
-        print(f"📊 Testing: {config['name']} (LR={config['lr']:.0e}, Epochs={config['epochs']}, Patience={patience})")
     
     # Log configuration to wandb if this is the main run
     if config.get('is_main_run', False):
@@ -180,13 +177,8 @@ def test_configuration(config, X_num_train, X_num_val, X_num_test,
                 # Update learning rate scheduler
                 scheduler.step(val_r2)
                 
-                if verbose and epoch % 100 == 0:
-                    print(f"    Epoch {epoch:4d}: Train Loss = {loss.item():.6f}, Val R² = {val_r2:.6f} (best: {best_val_r2:.6f})")
-        
         # Early stopping
         if patience_counter >= patience:
-            if verbose:
-                print(f"    Early stopping at epoch {epoch} (patience={patience})")
             break
     
     # Load best model and evaluate on test set
@@ -198,9 +190,6 @@ def test_configuration(config, X_num_train, X_num_val, X_num_test,
         test_pred = model(X_num_test_tensor, X_title_test_tensor)
         test_r2 = r2_score(y_test, test_pred.numpy())
         test_loss = criterion(test_pred, y_test_tensor).item()
-    
-    if verbose:
-        print(f"    Final: Val R² = {best_val_r2:.6f}, Test R² = {test_r2:.6f}, Test Loss = {test_loss:.6f}")
     
     # Log final results to wandb if this is the main run
     if config.get('is_main_run', False):
