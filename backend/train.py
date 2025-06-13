@@ -108,6 +108,13 @@ def test_configuration(config, X_num_train, X_num_val, X_num_test,
     if verbose:
         print(f"📊 Testing: {config['name']} (LR={config['lr']:.0e}, Epochs={config['epochs']})")
     
+    # Log configuration to wandb if this is the main run
+    if hasattr(config, 'is_main_run') and config.get('is_main_run', False):
+        wandb.log({
+            f"config/{k}": v for k, v in config.items() 
+            if k not in ['name', 'is_main_run']
+        })
+    
     for epoch in range(config['epochs']):
         # Training
         model.train()
@@ -127,6 +134,16 @@ def test_configuration(config, X_num_train, X_num_val, X_num_test,
             with torch.no_grad():
                 val_pred = model(X_num_val_tensor, X_title_val_tensor)
                 val_r2 = r2_score(y_val, val_pred.numpy())
+                
+                # Log metrics to wandb if this is the main run
+                if hasattr(config, 'is_main_run') and config.get('is_main_run', False):
+                    wandb.log({
+                        "epoch": epoch,
+                        "train_loss": loss.item(),
+                        "val_r2": val_r2,
+                        "best_val_r2": max(best_val_r2, val_r2),
+                        "patience_counter": patience_counter
+                    })
                 
                 if val_r2 > best_val_r2:
                     best_val_r2 = val_r2
@@ -157,6 +174,15 @@ def test_configuration(config, X_num_train, X_num_val, X_num_test,
     if verbose:
         print(f"    Final: Val R² = {best_val_r2:.6f}, Test R² = {test_r2:.6f}")
     
+    # Log final results to wandb if this is the main run
+    if hasattr(config, 'is_main_run') and config.get('is_main_run', False):
+        wandb.log({
+            "final_val_r2": best_val_r2,
+            "final_test_r2": test_r2,
+            "final_test_loss": test_loss,
+            "epochs_trained": min(epoch + 1, config['epochs'])
+        })
+    
     return {
         'val_r2': best_val_r2,
         'test_r2': test_r2,
@@ -169,7 +195,7 @@ def test_configuration(config, X_num_train, X_num_val, X_num_test,
 def create_run_directory():
     """Creates a unique directory for this training run."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join("training_runs", f"run_{timestamp}")
+    run_dir = os.path.join("artifacts/training_runs", f"run_{timestamp}")
     os.makedirs(run_dir, exist_ok=True)
     return run_dir
 
@@ -193,8 +219,8 @@ def save_run_config(run_dir, config, model_params=None):
 
 def update_runs_summary(run_dir, config, final_metrics):
     """Updates the master runs summary file."""
-    summary_file = "training_runs/runs_summary.csv"
-    os.makedirs("training_runs", exist_ok=True)
+    summary_file = "artifacts/training_runs/runs_summary.csv"
+    os.makedirs("artifacts/training_runs", exist_ok=True)
     
     summary_data = {
         'timestamp': datetime.now().isoformat(),
@@ -224,6 +250,18 @@ def train():
     """Main function to run the training pipeline."""
     print("🔍 NEURAL NETWORK: NUMERICAL + TITLE EMBEDDINGS (NO DOMAIN/USER)")
     print("=" * 65)
+    
+    # --- Initialize Weights & Biases ---
+    wandb.init(
+        project="hackernews-regression", 
+        name=f"numerical_plus_title_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        config={
+            "architecture": "numerical_plus_title",
+            "features": "numerical_enhanced_36d_plus_title_200d", 
+            "approach": "separate_processing_then_combine",
+            "target": "log_score_prediction"
+        }
+    )
     
     # --- Create Run Directory ---
     run_dir = create_run_directory()
@@ -277,6 +315,17 @@ def train():
     print(f"  Total input: {X_numerical_enhanced.shape[1] + X_title_emb.shape[1]}D")
     print(f"Split: Train={len(train_idx):,}, Val={len(val_idx):,}, Test={len(test_idx):,}")
     
+    # Log data info to wandb
+    wandb.log({
+        "data/total_samples": len(data['y']),
+        "data/train_samples": len(train_idx),
+        "data/val_samples": len(val_idx), 
+        "data/test_samples": len(test_idx),
+        "data/numerical_features": X_numerical_enhanced.shape[1],
+        "data/title_embedding_dim": X_title_emb.shape[1],
+        "data/total_features": X_numerical_enhanced.shape[1] + X_title_emb.shape[1]
+    })
+    
     # Split the features
     X_num_train = X_numerical_enhanced[train_idx]
     X_num_val = X_numerical_enhanced[val_idx] 
@@ -324,32 +373,58 @@ def train():
     print(f"LinearRegression (Numerical + Title) Test R²: {lr_combined_test_r2:.6f}")
     print(f"Title embeddings add: {lr_combined_test_r2 - lr_num_test_r2:+.6f} R² points")
 
+    # Log baseline results to wandb
+    wandb.log({
+        "baseline/lr_numerical_only_r2": lr_num_test_r2,
+        "baseline/lr_combined_r2": lr_combined_test_r2,
+        "baseline/title_embeddings_improvement": lr_combined_test_r2 - lr_num_test_r2
+    })
+
     # --- Neural Network Configuration Testing ---
     print(f"\n🔍 NEURAL NETWORK CONFIGURATION TESTING:")
     
     configs = [
-        {"lr": 5e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.1, "name": "Medium LR, Medium Epochs"},
-        {"lr": 2e-3, "epochs": 1500, "hidden_dim": 128, "dropout": 0.1, "name": "Lower LR, More Epochs"},
-        {"lr": 1e-3, "epochs": 2000, "hidden_dim": 128, "dropout": 0.1, "name": "Low LR, Long Training"},
-        {"lr": 3e-3, "epochs": 1200, "hidden_dim": 256, "dropout": 0.15, "name": "Larger Network, Medium LR"},
-        {"lr": 2e-3, "epochs": 1500, "hidden_dim": 64, "dropout": 0.05, "name": "Smaller Network, Lower Dropout"},
+        {"lr": 2e-3, "epochs": 500, "hidden_dim": 128, "dropout": 0.1, "patience": 10000, "name": "Lower LR, 500 Epochs, No Early Stopping"},
     ]
 
     best_nn_r2 = -float('inf')
     best_config = None
     best_result = None
+    config_results = []
 
-    for config in configs:
+    for i, config in enumerate(configs):
+        # Mark the best config as main run for detailed logging
+        if i == 0:  # For now, log the first config in detail
+            config['is_main_run'] = True
+            
         result = test_configuration(
             config, X_num_train_scaled, X_num_val_scaled, X_num_test_scaled,
             X_title_train, X_title_val, X_title_test,
             y_train, y_val, y_test
         )
         
+        config_results.append({
+            'config_name': config['name'],
+            'test_r2': result['test_r2'],
+            'val_r2': result['val_r2'],
+            'lr': config['lr'],
+            'hidden_dim': config.get('hidden_dim', 128),
+            'dropout': config.get('dropout', 0.1)
+        })
+        
         if result['test_r2'] > best_nn_r2:
             best_nn_r2 = result['test_r2']
             best_config = config
             best_result = result
+
+    # Log all configuration results
+    for i, result in enumerate(config_results):
+        wandb.log({
+            f"configs/config_{i}_test_r2": result['test_r2'],
+            f"configs/config_{i}_val_r2": result['val_r2'],
+            f"configs/config_{i}_lr": result['lr'],
+            f"configs/config_{i}_hidden_dim": result['hidden_dim'],
+        })
 
     # --- Results Summary ---
     print(f"\n📈 FINAL COMPARISON:")
@@ -363,15 +438,28 @@ def train():
     print(f"  Neural Network vs LinearRegression:  {best_nn_r2 - lr_combined_test_r2:+.6f}")
     print(f"  Total NN improvement over Num only:  {best_nn_r2 - lr_num_test_r2:+.6f}")
 
+    # Log final comparison metrics
+    wandb.log({
+        "final/lr_numerical_only": lr_num_test_r2,
+        "final/lr_combined": lr_combined_test_r2,
+        "final/best_nn": best_nn_r2,
+        "final/title_improvement": lr_combined_test_r2 - lr_num_test_r2,
+        "final/nn_vs_lr_improvement": best_nn_r2 - lr_combined_test_r2,
+        "final/total_nn_improvement": best_nn_r2 - lr_num_test_r2
+    })
+
     if best_nn_r2 > lr_combined_test_r2:
         print("✅ SUCCESS! Neural Network beats LinearRegression!")
         print("💡 Numerical + Title embeddings work well together")
+        wandb.log({"status": "success_nn_beats_lr"})
     elif best_nn_r2 > lr_combined_test_r2 - 0.003:
         print("🔶 CLOSE! Neural Network nearly matches LinearRegression")
         print("💡 This combination is promising - might need more tuning")
+        wandb.log({"status": "close_performance"})
     else:
         print("🚨 Neural Network still underperforms LinearRegression")
         print("💡 Even this simpler combination struggles")
+        wandb.log({"status": "underperforming"})
 
     # Show progress toward target
     target_r2 = 0.2
@@ -382,6 +470,11 @@ def train():
     else:
         print(f"\n📊 Current R² = {best_nn_r2:.4f} - still far from target R² = {target_r2}")
         print("💭 The fundamental signal in this dataset might be limited")
+
+    wandb.log({
+        "target/target_r2": target_r2,
+        "target/progress_ratio": best_nn_r2 / target_r2
+    })
 
     # --- Save Results and Artifacts ---
     print(f"\n💾 Saving results...")
@@ -441,7 +534,29 @@ def train():
     plot_path = os.path.join(run_dir, "predicted_vs_actual.png")
     plt.savefig(plot_path, dpi=150, bbox_inches='tight')
     print(f"📈 Plot saved: {plot_path}")
+    
+    # Log the scatter plot to wandb
+    wandb.log({"predictions/scatter_plot": wandb.Image(plt)})
     plt.close()
+    
+    # Create and log additional plots
+    # Residuals plot
+    plt.figure(figsize=(10, 6))
+    residuals = y_test - test_preds
+    plt.scatter(test_preds, residuals, alpha=0.3, s=5)
+    plt.axhline(y=0, color='r', linestyle='--')
+    plt.xlabel('Predicted Values (log scale)')
+    plt.ylabel('Residuals (log scale)')
+    plt.title('Residuals Plot')
+    plt.grid(True)
+    wandb.log({"predictions/residuals_plot": wandb.Image(plt)})
+    plt.close()
+    
+    # Log model architecture summary
+    wandb.log({
+        "model/total_parameters": sum(p.numel() for p in best_model.parameters()),
+        "model/trainable_parameters": sum(p.numel() for p in best_model.parameters() if p.requires_grad)
+    })
     
     # Update runs summary
     final_metrics = {
@@ -464,6 +579,9 @@ def train():
             print("✅ Cleanup complete.")
     else:
         print("⏩ No temporary files to clean up or path mismatch.")
+    
+    # Finish wandb run
+    wandb.finish()
 
 
 if __name__ == '__main__':
