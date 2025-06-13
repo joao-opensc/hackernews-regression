@@ -18,13 +18,6 @@ NUMERICAL_DIM = 36          # Enhanced: 34 original + domain_mean + user_mean
 
 # Neural Network Configuration Testing - Multiple configs will be tested
 # The training script will automatically test these ranges:
-DEFAULT_CONFIGS = [
-    {"lr": 5e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.1, "name": "Medium LR, Medium Epochs"},
-    {"lr": 2e-3, "epochs": 1500, "hidden_dim": 128, "dropout": 0.1, "name": "Lower LR, More Epochs"},
-    {"lr": 1e-3, "epochs": 2000, "hidden_dim": 128, "dropout": 0.1, "name": "Low LR, Long Training"},
-    {"lr": 3e-3, "epochs": 1200, "hidden_dim": 256, "dropout": 0.15, "name": "Larger Network, Medium LR"},
-    {"lr": 2e-3, "epochs": 1500, "hidden_dim": 64, "dropout": 0.05, "name": "Smaller Network, Lower Dropout"},
-]
 
 # Single Config for Quick Testing (if needed)
 LEARNING_RATE = 2e-3        # Good starting point for simplified architecture
@@ -32,7 +25,7 @@ HIDDEN_DIM = 128            # Balanced network size
 DROPOUT_RATE = 0.1          # Moderate dropout
 WEIGHT_DECAY = 1e-5         # Light regularization
 PATIENCE = 300              # Patience for early stopping
-MAX_EPOCHS = 2000           # Maximum epochs per configuration test
+MAX_EPOCHS = 10           # Maximum epochs per configuration test
 
 # Data Split Constants
 VAL_SIZE = 0.2              # 20% for test set

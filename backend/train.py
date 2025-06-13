@@ -400,23 +400,33 @@ def train():
     # --- Neural Network Configuration Testing ---
     print(f"\n🔍 NEURAL NETWORK CONFIGURATION TESTING:")
     
+    # Base configuration from config.py
+    base_config = {
+        "lr": cfg.LEARNING_RATE,
+        "epochs": cfg.MAX_EPOCHS,
+        "hidden_dim": cfg.HIDDEN_DIM,
+        "dropout": cfg.DROPOUT_RATE,
+        "patience": cfg.PATIENCE,
+        "weight_decay": cfg.WEIGHT_DECAY
+    }
+    
     configs = [
-        # Original approach with better early stopping
-        {"lr": 2e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.1, "patience": 150, "weight_decay": 1e-5, "name": "Baseline: LR=2e-3, H=128"},
+        # Baseline from config
+        {**base_config, "name": f"Baseline (from config): LR={cfg.LEARNING_RATE}, H={cfg.HIDDEN_DIM}"},
         
         # Try different learning rates
-        {"lr": 1e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.1, "patience": 150, "weight_decay": 1e-5, "name": "Lower LR: LR=1e-3, H=128"},
-        {"lr": 5e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.1, "patience": 150, "weight_decay": 1e-5, "name": "Higher LR: LR=5e-3, H=128"},
+        {**base_config, "lr": 1e-3, "name": "Lower LR: LR=1e-3"},
+        {**base_config, "lr": 5e-3, "name": "Higher LR: LR=5e-3"},
         
         # Try different architectures
-        {"lr": 2e-3, "epochs": 1000, "hidden_dim": 256, "dropout": 0.15, "patience": 150, "weight_decay": 1e-5, "name": "Bigger Network: H=256, Dropout=0.15"},
-        {"lr": 2e-3, "epochs": 1000, "hidden_dim": 64, "dropout": 0.05, "patience": 150, "weight_decay": 1e-5, "name": "Smaller Network: H=64, Dropout=0.05"},
+        {**base_config, "hidden_dim": 256, "dropout": 0.15, "name": "Bigger Network: H=256, Dropout=0.15"},
+        {**base_config, "hidden_dim": 64, "dropout": 0.05, "name": "Smaller Network: H=64, Dropout=0.05"},
         
         # Try more regularization
-        {"lr": 2e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.2, "patience": 150, "weight_decay": 1e-4, "name": "More Regularization: Dropout=0.2, WD=1e-4"},
+        {**base_config, "dropout": 0.2, "weight_decay": 1e-4, "name": "More Regularization: Dropout=0.2, WD=1e-4"},
         
         # Try less regularization
-        {"lr": 2e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.05, "patience": 150, "weight_decay": 1e-6, "name": "Less Regularization: Dropout=0.05, WD=1e-6"},
+        {**base_config, "dropout": 0.05, "weight_decay": 1e-6, "name": "Less Regularization: Dropout=0.05, WD=1e-6"},
     ]
 
     best_nn_r2 = -float('inf')

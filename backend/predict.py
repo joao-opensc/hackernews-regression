@@ -11,8 +11,7 @@ import numpy as np
 import torch
 
 import config as cfg
-from data_processing import (clean_text, extract_domain,
-                                 load_glove_embeddings, title_to_embedding)
+from data_processing import (clean_text, extract_domain, load_glove_embeddings, title_to_embedding)
 from train import NumericalPlusTitleNN
 
 
@@ -56,21 +55,6 @@ class Scorer:
         
         # Load artifacts
         self.word_to_idx, self.embeddings = load_glove_embeddings()
-        
-        # Load encoders from the run directory or default location
-        try:
-            with open(os.path.join(artifacts_dir, "domain_encoder.pkl"), 'rb') as f:
-                self.domain_encoder = pickle.load(f)
-        except FileNotFoundError:
-            with open(cfg.DOMAIN_ENCODER_PATH, 'rb') as f:
-                self.domain_encoder = pickle.load(f)
-        
-        try:
-            with open(os.path.join(artifacts_dir, "user_encoder.pkl"), 'rb') as f:
-                self.user_encoder = pickle.load(f)
-        except FileNotFoundError:
-            with open(cfg.USER_ENCODER_PATH, 'rb') as f:
-                self.user_encoder = pickle.load(f)
         
         # Load scaler from the run directory or default location
         try:
@@ -246,34 +230,30 @@ class Scorer:
         return numerical_features, domain, user
 
     def predict(self, title: str, url: str, user: str, submission_time: datetime):
-        """Predicts the score for a new story using the new architecture."""
+        """Predicts the score for a new story using the same architecture as training."""
         
-        # 1. Create enhanced numerical features (34D)
+        # 1. Create enhanced numerical features (34D) - same as training
         numerical_features, domain, user_name = self.create_enhanced_features(title, url, user, submission_time)
         
-        # 2. Add statistical domain/user features (2D more = 36D total)
-        domain_mapped = domain if domain in self.domain_encoder.classes_ else 'OTHER'
-        domain_id = self.domain_encoder.transform([domain_mapped])[0]
-        domain_mean = self.domain_stats.get(domain_id, self.global_mean)
+        # 2. Add statistical domain/user features (2D more = 36D total) - same as training
+        # Use domain string directly as key (same as training saves it)
+        domain_mean = self.domain_stats.get(domain, self.global_mean)
+        user_mean = self.user_stats.get(user_name, self.global_mean)
         
-        user_mapped = user_name if user_name in self.user_encoder.classes_ else 'OTHER'
-        user_id = self.user_encoder.transform([user_mapped])[0]
-        user_mean = self.user_stats.get(user_id, self.global_mean)
-        
-        # Enhanced numerical features (36D)
+        # Enhanced numerical features (36D) - same as training
         numerical_enhanced = np.append(numerical_features, [domain_mean, user_mean])
         
-        # 3. Title embeddings (200D)
+        # 3. Title embeddings (200D) - same as training
         title_emb = title_to_embedding(title, self.word_to_idx, self.embeddings)
         
-        # 4. Scale numerical features
+        # 4. Scale numerical features - same as training
         numerical_scaled = self.scaler.transform(numerical_enhanced.reshape(1, -1))
         
-        # 5. Create tensors
+        # 5. Create tensors - same as training
         numerical_tensor = torch.FloatTensor(numerical_scaled).to(self.device)
         title_tensor = torch.FloatTensor(title_emb).unsqueeze(0).to(self.device)
         
-        # 6. Predict using new architecture
+        # 6. Predict using architecture - same as training
         with torch.no_grad():
             pred_log = self.model(numerical_tensor, title_tensor)
             pred_orig = np.expm1(pred_log.cpu().item())
