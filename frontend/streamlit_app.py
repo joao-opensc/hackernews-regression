@@ -2,6 +2,8 @@ import streamlit as st
 # from annotated_text import annotated_text
 from datetime import datetime, time, timedelta
 import os
+import json
+import random
 
 import torch
 import numpy as np
@@ -12,26 +14,58 @@ import numpy as np
 
 import requests
 
-def main():
+def load_sample_data():
+    with open('frontend/data/samples.json', 'r') as f:
+        data = json.load(f)
+    return random.choice(data['entries'])
 
+def main():
     st.title("Hacker News Upvote Predictor 🚀")
+
+    # Initialize session state for form values
+    if 'title' not in st.session_state:
+        st.session_state.title = ""
+    if 'author' not in st.session_state:
+        st.session_state.author = ""
+    if 'url' not in st.session_state:
+        st.session_state.url = ""
+    if 'date' not in st.session_state:
+        st.session_state.date = datetime.now().date()
+    if 'time_str' not in st.session_state:
+        st.session_state.time_str = (datetime.now()+timedelta(hours=1)).strftime("%H:%M")
+    if 'user_prediction' not in st.session_state:
+        st.session_state.user_prediction = 0
+    if 'true_score' not in st.session_state:
+        st.session_state.true_score = None
+    if 'model_prediction' not in st.session_state:
+        st.session_state.model_prediction = None
 
     input_container = st.container()
     with input_container:
-
         st.write("Enter post details below to predict the number of upvotes.")
 
-        default_date = datetime.now().date()
-        default_time = datetime.now()+timedelta(hours=1)
-        # st.write(default_time.strftime("%H:%M"))
+        # Add sample button at the top
+        if st.button("Load Sample Data"):
+            sample = load_sample_data()
+            # Parse the timestamp from the sample
+            sample_time = datetime.strptime(sample['time'], "%Y-%m-%d %H:%M:%S")
+            st.session_state.title = sample['title']
+            st.session_state.author = sample['by']
+            st.session_state.url = sample['url']
+            st.session_state.date = sample_time.date()
+            st.session_state.time_str = sample_time.strftime("%H:%M")
+            st.session_state.true_score = sample['score']
+            st.session_state.user_prediction = 0
+            st.session_state.model_prediction = None
 
-        title = st.text_input("Post Title")
-        author = st.text_input("Author")
-        url = st.text_input("URL Link Attached")
-        date = st.date_input("Post Date", value=default_date)
-        time_str = st.text_input("Post Time (HH:MM)", value=default_time.strftime("%H:%M"))
-
-
+        title = st.text_input("Post Title", value=st.session_state.title)
+        author = st.text_input("Author", value=st.session_state.author)
+        url = st.text_input("URL Link Attached", value=st.session_state.url)
+        date = st.date_input("Post Date", value=st.session_state.date)
+        time_str = st.text_input("Post Time (HH:MM)", value=st.session_state.time_str)
+        
+        # Add user prediction field
+        st.session_state.user_prediction = st.number_input("Your Upvote Prediction", min_value=0, step=1, value=st.session_state.user_prediction)
 
         st.write(f"You selected: {date} @ {time_str}")
 
@@ -50,13 +84,10 @@ def main():
                     "title": title,
                     "url": url,
                     "user": author,
-                    # "date": date,
                     "timestamp": unix_timestamp
                 }
             except ValueError:
                 st.error("Please enter time in 24-hour HH:MM format.")
-            # prediction = model.predict(process_input(input_data))
-            # st.metric("Predicted Upvotes", round(prediction[0], 2))
             
             try:
                 backend_url = os.getenv("BACKEND_URL", "http://localhost:8888")
@@ -64,9 +95,28 @@ def main():
 
                 if response.status_code == 200:
                     prediction = response.json()["predicted_score"]
+                    st.session_state.model_prediction = prediction
                     st.success(f"Predicted Upvotes: {prediction}")
                 else:
                     st.error(f"Error from server: {response.text}")
             except Exception as e:
                 st.error(f"Failed to connect to FastAPI: {e}")
+
+    if st.session_state.model_prediction is not None and st.session_state.true_score is not None:
+        st.subheader("Results")
+        user_error = abs(st.session_state.true_score - st.session_state.user_prediction)
+        model_error = abs(st.session_state.true_score - st.session_state.model_prediction)
+
+        st.write(f"Your prediction: {st.session_state.user_prediction} (Difference: {user_error})")
+        st.write(f"Model's prediction: {st.session_state.model_prediction} (Difference: {model_error})")
+        st.write(f"Actual score: {st.session_state.true_score}")
+
+        if user_error < model_error:
+            st.balloons()
+            st.success("You win!")
+        elif model_error < user_error:
+            st.error("The model wins!")
+        else:
+            st.info("It's a tie!")
+
 main()

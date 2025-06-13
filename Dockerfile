@@ -25,10 +25,10 @@ COPY ./artifacts /app/artifacts
 COPY ./data /app/data
 
 # Expose the port the app runs on
-EXPOSE 8000
+EXPOSE 8888
 
 # Run the application using a production-grade server like Gunicorn
-# The command should be: gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app -b 0.0.0.0:8000
+# The command should be: gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app -b 0.0.0.0:8888
 # Breaking it down for the CMD instruction:
-# ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "-b", "0.0.0.0:8000"]
-CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "app.main:app"] 
+# ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "-b", "0.0.0.0:8888"]
+CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8888", "app.main:app"] 
