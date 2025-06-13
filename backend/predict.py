@@ -311,10 +311,6 @@ if __name__ == '__main__':
         print(f"URL: {test_url}")
         print(f"User: {test_user}")
         print(f"Predicted Score: {predicted_score}")
-        print(f"\nUsage examples:")
-        print(f"  python predict.py --title 'Show HN: My Project' --user 'myuser' --url 'https://github.com/user/repo'")
-        print(f"  python predict.py --title 'Ask HN: What do you think?' --user 'curious' (self-post)")
-        print(f"  python predict.py --run-dir artifacts/training_runs/run_20250613_103621 --title 'My Title' --user 'user'")
     else:
         # Arguments provided, run main function
         main()
