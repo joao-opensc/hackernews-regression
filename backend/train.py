@@ -25,37 +25,49 @@ from backend.data_processing import create_data_loader_fixed as create_data_load
 
 
 class NumericalPlusTitleNN(nn.Module):
-    """Neural network that processes numerical and title features separately then combines them."""
+    """Enhanced neural network that processes numerical and title features separately then combines them."""
     
     def __init__(self, numerical_dim, title_dim, hidden_dim=128, dropout=0.1):
         super().__init__()
         
-        # Process numerical features
+        # Process numerical features with deeper network
         self.numerical_net = nn.Sequential(
             nn.Linear(numerical_dim, hidden_dim // 2),
             nn.ReLU(),
             nn.BatchNorm1d(hidden_dim // 2),
-            nn.Dropout(dropout)
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim // 2, hidden_dim // 2),
+            nn.ReLU(),
+            nn.BatchNorm1d(hidden_dim // 2),
+            nn.Dropout(dropout / 2)
         )
         
-        # Process title embeddings  
+        # Process title embeddings with deeper network
         self.title_net = nn.Sequential(
             nn.Linear(title_dim, hidden_dim),
             nn.ReLU(),
             nn.BatchNorm1d(hidden_dim),
-            nn.Dropout(dropout)
-        )
-        
-        # Combined processing
-        combined_dim = (hidden_dim // 2) + hidden_dim  # numerical + title
-        self.combined_net = nn.Sequential(
-            nn.Linear(combined_dim, hidden_dim),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.BatchNorm1d(hidden_dim),
+            nn.Dropout(dropout / 2)
+        )
+        
+        # Combined processing with more capacity
+        combined_dim = (hidden_dim // 2) + hidden_dim  # numerical + title
+        self.combined_net = nn.Sequential(
+            nn.Linear(combined_dim, hidden_dim * 2),
+            nn.ReLU(),
+            nn.BatchNorm1d(hidden_dim * 2),
             nn.Dropout(dropout),
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.ReLU(),
+            nn.BatchNorm1d(hidden_dim),
+            nn.Dropout(dropout / 2),
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
-            nn.Dropout(dropout / 2),
+            nn.Dropout(dropout / 4),
             nn.Linear(hidden_dim // 2, 1)
         )
     
@@ -100,16 +112,21 @@ def test_configuration(config, X_num_train, X_num_val, X_num_test,
         weight_decay=config.get('weight_decay', 1e-5)
     )
     
+    # Add learning rate scheduler
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='max', factor=0.5, patience=50, verbose=False
+    )
+    
     best_val_r2 = -float('inf')
     patience_counter = 0
-    patience = config.get('patience', 300)
+    patience = config.get('patience', 100)  # Restore reasonable early stopping
     best_model_state = None
     
     if verbose:
-        print(f"📊 Testing: {config['name']} (LR={config['lr']:.0e}, Epochs={config['epochs']})")
+        print(f"📊 Testing: {config['name']} (LR={config['lr']:.0e}, Epochs={config['epochs']}, Patience={patience})")
     
     # Log configuration to wandb if this is the main run
-    if hasattr(config, 'is_main_run') and config.get('is_main_run', False):
+    if config.get('is_main_run', False):
         wandb.log({
             f"config/{k}": v for k, v in config.items() 
             if k not in ['name', 'is_main_run']
@@ -128,18 +145,26 @@ def test_configuration(config, X_num_train, X_num_val, X_num_test,
         
         optimizer.step()
         
-        # Validation every 50 epochs
-        if epoch % 50 == 0:
+        # Log training loss every epoch for main run
+        if config.get('is_main_run', False):
+            wandb.log({
+                "epoch": epoch,
+                "train_loss": loss.item(),
+                "learning_rate": optimizer.param_groups[0]['lr']
+            })
+        
+        # Validation every 25 epochs (more frequent)
+        if epoch % 25 == 0:
             model.eval()
             with torch.no_grad():
                 val_pred = model(X_num_val_tensor, X_title_val_tensor)
+                val_loss = criterion(val_pred, y_val_tensor).item()
                 val_r2 = r2_score(y_val, val_pred.numpy())
                 
                 # Log metrics to wandb if this is the main run
-                if hasattr(config, 'is_main_run') and config.get('is_main_run', False):
+                if config.get('is_main_run', False):
                     wandb.log({
-                        "epoch": epoch,
-                        "train_loss": loss.item(),
+                        "val_loss": val_loss,
                         "val_r2": val_r2,
                         "best_val_r2": max(best_val_r2, val_r2),
                         "patience_counter": patience_counter
@@ -150,15 +175,18 @@ def test_configuration(config, X_num_train, X_num_val, X_num_test,
                     patience_counter = 0
                     best_model_state = model.state_dict().copy()
                 else:
-                    patience_counter += 50
+                    patience_counter += 25
                 
-                if verbose and epoch % 200 == 0:
-                    print(f"    Epoch {epoch:4d}: Val R² = {val_r2:.6f} (best: {best_val_r2:.6f})")
+                # Update learning rate scheduler
+                scheduler.step(val_r2)
+                
+                if verbose and epoch % 100 == 0:
+                    print(f"    Epoch {epoch:4d}: Train Loss = {loss.item():.6f}, Val R² = {val_r2:.6f} (best: {best_val_r2:.6f})")
         
         # Early stopping
         if patience_counter >= patience:
             if verbose:
-                print(f"    Early stopping at epoch {epoch}")
+                print(f"    Early stopping at epoch {epoch} (patience={patience})")
             break
     
     # Load best model and evaluate on test set
@@ -172,10 +200,10 @@ def test_configuration(config, X_num_train, X_num_val, X_num_test,
         test_loss = criterion(test_pred, y_test_tensor).item()
     
     if verbose:
-        print(f"    Final: Val R² = {best_val_r2:.6f}, Test R² = {test_r2:.6f}")
+        print(f"    Final: Val R² = {best_val_r2:.6f}, Test R² = {test_r2:.6f}, Test Loss = {test_loss:.6f}")
     
     # Log final results to wandb if this is the main run
-    if hasattr(config, 'is_main_run') and config.get('is_main_run', False):
+    if config.get('is_main_run', False):
         wandb.log({
             "final_val_r2": best_val_r2,
             "final_test_r2": test_r2,
@@ -384,7 +412,22 @@ def train():
     print(f"\n🔍 NEURAL NETWORK CONFIGURATION TESTING:")
     
     configs = [
-        {"lr": 2e-3, "epochs": 500, "hidden_dim": 128, "dropout": 0.1, "patience": 10000, "name": "Lower LR, 500 Epochs, No Early Stopping"},
+        # Original approach with better early stopping
+        {"lr": 2e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.1, "patience": 150, "weight_decay": 1e-5, "name": "Baseline: LR=2e-3, H=128"},
+        
+        # Try different learning rates
+        {"lr": 1e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.1, "patience": 150, "weight_decay": 1e-5, "name": "Lower LR: LR=1e-3, H=128"},
+        {"lr": 5e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.1, "patience": 150, "weight_decay": 1e-5, "name": "Higher LR: LR=5e-3, H=128"},
+        
+        # Try different architectures
+        {"lr": 2e-3, "epochs": 1000, "hidden_dim": 256, "dropout": 0.15, "patience": 150, "weight_decay": 1e-5, "name": "Bigger Network: H=256, Dropout=0.15"},
+        {"lr": 2e-3, "epochs": 1000, "hidden_dim": 64, "dropout": 0.05, "patience": 150, "weight_decay": 1e-5, "name": "Smaller Network: H=64, Dropout=0.05"},
+        
+        # Try more regularization
+        {"lr": 2e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.2, "patience": 150, "weight_decay": 1e-4, "name": "More Regularization: Dropout=0.2, WD=1e-4"},
+        
+        # Try less regularization
+        {"lr": 2e-3, "epochs": 1000, "hidden_dim": 128, "dropout": 0.05, "patience": 150, "weight_decay": 1e-6, "name": "Less Regularization: Dropout=0.05, WD=1e-6"},
     ]
 
     best_nn_r2 = -float('inf')
